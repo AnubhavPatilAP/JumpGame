@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Dimensions, Text } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { Asset } from 'expo-asset';
 import Player from './components/Player';
 import Platform from './components/Platform';
 
@@ -7,40 +9,79 @@ const { width, height } = Dimensions.get('window');
 const PLAYER_SIZE = 60;
 const PLATFORM_HEIGHT = 20;
 
+SplashScreen.preventAutoHideAsync(); // Splash will stay until manually hidden
+
 export default function App() {
+  const [isReady, setIsReady] = useState(false);
   const [playerY, setPlayerY] = useState(height - 200);
   const [velocityY, setVelocityY] = useState(0);
   const gravity = 0.6;
+  const platformY = height - 100;
 
-  const platformY = useRef(height - 100).current;
-
+  // Load assets (optional if your PNGs are imported via require)
   useEffect(() => {
-    const interval = setInterval(() => {
-      setVelocityY((v) => v + gravity);
-      setPlayerY((y) => {
-        const newY = y + velocityY;
+    async function prepare() {
+      try {
+        await Asset.loadAsync([
+          require('./assets/player.png'),
+          require('./assets/platform.png'),
+        ]);
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        setIsReady(true);
+        await SplashScreen.hideAsync(); // Hide splash screen when ready
+      }
+    }
 
+    prepare();
+  }, []);
+
+  // Game loop
+  useEffect(() => {
+    if (!isReady) return;
+
+    const interval = setInterval(() => {
+      setPlayerY((y) => {
+        const newVelocity = velocityY + gravity;
+        const newY = y + newVelocity;
+
+        // Collision detection
         if (
           newY + PLAYER_SIZE >= platformY &&
           newY + PLAYER_SIZE <= platformY + PLATFORM_HEIGHT &&
           velocityY > 0
         ) {
-          setVelocityY(-15); // bounce
+          setVelocityY(-15); // jump
+          return y - 15;
         }
 
+        setVelocityY(newVelocity);
         return newY;
       });
     }, 16);
 
     return () => clearInterval(interval);
-  }, [velocityY]);
+  }, [isReady, velocityY]);
 
-  return (
-    <View style={styles.container}>
-      <Player y={playerY} />
-      <Platform y={platformY} />
-    </View>
-  );
+  if (!isReady) return null;
+
+  // Error boundary wrap
+  try {
+    return (
+      <View style={styles.container}>
+        <Player y={playerY} />
+        <Platform y={platformY} />
+      </View>
+    );
+  } catch (e) {
+    console.error('Render Error:', e);
+    return (
+      <View style={styles.container}>
+        <Text style={{ color: 'red', fontSize: 20 }}>Something went wrong</Text>
+      </View>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
