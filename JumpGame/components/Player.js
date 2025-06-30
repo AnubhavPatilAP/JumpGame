@@ -1,13 +1,11 @@
 import React from 'react';
-import { Image, StyleSheet, Dimensions } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 
-const { width } = Dimensions.get('window');
-
-export default function Player({ y }) {
+export default function Player({ x, y }) {
   return (
     <Image
       source={require('../assets/player.png')}
-      style={[styles.player, { top: y }]}
+      style={[styles.player, { top: y, left: x }]}
     />
   );
 }
@@ -17,6 +15,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 60,
     height: 60,
-    left: width / 2 - 30,
   },
 });

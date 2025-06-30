@@ -1,13 +1,12 @@
 import React from 'react';
-import { Image, StyleSheet, Dimensions } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 
-const { width } = Dimensions.get('window');
-
-export default function Platform({ y }) {
+export default function PlatformBlock({ x, y }) {
   return (
     <Image
       source={require('../assets/platform.png')}
-      style={[styles.platform, { top: y }]}
+      style={[styles.platform, { top: y, left: x }]}
+      resizeMode="contain"
     />
   );
 }
@@ -17,6 +16,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 100,
     height: 20,
-    left: width / 2 - 50,
   },
 });
