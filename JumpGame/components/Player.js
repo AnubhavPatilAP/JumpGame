@@ -1,11 +1,19 @@
 import React from 'react';
 import { Image, StyleSheet } from 'react-native';
+import playerImage from '../assets/player.png';
 
-export default function Player({ x, y }) {
+export default function Player({ x, y, facing }) {
   return (
     <Image
-      source={require('../assets/player.png')}
-      style={[styles.player, { top: y, left: x }]}
+      source={playerImage}
+      style={[
+        styles.player,
+        {
+          left: x,
+          top: y,
+          transform: [{ scaleX: facing === 'left' ? -1 : 1 }],
+        },
+      ]}
     />
   );
 }

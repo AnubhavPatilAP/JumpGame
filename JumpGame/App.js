@@ -17,8 +17,17 @@ const PLAYER_SIZE = 60;
 const PLATFORM_WIDTH = 100;
 const PLATFORM_HEIGHT = 20;
 const GRAVITY = 0.6;
-const JUMP_VELOCITY = -15;
-const MAX_JUMP_HEIGHT = 250;
+
+const JUMP_VELOCITY = -18;
+const PLATFORM_X_RANGE = {
+  min: width * 0.25,
+  max: width * 0.75 - PLATFORM_WIDTH,
+};
+const PLATFORM_Y_GAP_RANGE = {
+  min: 90,
+  max: 130,
+};
+const MAX_PLATFORM_Y = height - 150;
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,13 +38,17 @@ export default function App() {
   const [playerY, setPlayerY] = useState(height - 200);
   const [playerX, setPlayerX] = useState(width / 2 - PLAYER_SIZE / 2);
   const [velocityY, setVelocityY] = useState(0);
-  const [direction, setDirection] = useState(null); // 'left' or 'right'
+  const [direction, setDirection] = useState(null);
+  const [facing, setFacing] = useState('right');
   const [platforms, setPlatforms] = useState([]);
+  const scrollOffset = useRef(0);
   const speed = 5;
 
-  const scrollOffset = useRef(0); // how far the game has scrolled
+  // 🟩 Score logic
+  const [score, setScore] = useState(0);
+  const scoredPlatforms = useRef(new Set());
 
-  // Load assets
+  //--------------- Load Assets ---------------
   useEffect(() => {
     async function prepare() {
       try {
@@ -54,30 +67,35 @@ export default function App() {
     prepare();
   }, []);
 
-  // Generate initial platforms and place player on the lowest one
+  //--------------- Generate Initial Platforms ---------------
   useEffect(() => {
     if (isReady && !showMenu) {
       const initial = [];
-      let y = height - 100;
+      let y = MAX_PLATFORM_Y;
 
       for (let i = 0; i < 6; i++) {
-        const x = Math.random() * (width - PLATFORM_WIDTH);
-        initial.push({ x, y });
-        y -= Math.random() * 120 + 80;
+        const x = RNPlatform.OS === 'web'
+          ? Math.random() * (PLATFORM_X_RANGE.max - PLATFORM_X_RANGE.min) + PLATFORM_X_RANGE.min
+          : Math.random() * (width - PLATFORM_WIDTH);
+
+        initial.push({ id: i, x, y }); // give each platform an id
+        const gapY = Math.random() * (PLATFORM_Y_GAP_RANGE.max - PLATFORM_Y_GAP_RANGE.min) + PLATFORM_Y_GAP_RANGE.min;
+        y -= gapY;
+        if (y < 0) break;
       }
 
       setPlatforms(initial);
+      scoredPlatforms.current.clear(); // 🟩 reset score state
+      setScore(0);
 
-      // Place player centered on lowest platform
       const lowest = initial.reduce((a, b) => (a.y > b.y ? a : b));
       setPlayerX(lowest.x + PLATFORM_WIDTH / 2 - PLAYER_SIZE / 2);
       setPlayerY(lowest.y - PLAYER_SIZE);
-      setVelocityY(0); // start stationary
+      setVelocityY(0);
     }
   }, [isReady, showMenu]);
 
-
-  // Game loop
+  //--------------- Game Loop ---------------
   useEffect(() => {
     if (!isReady || showMenu || gameOver) return;
 
@@ -86,18 +104,24 @@ export default function App() {
         const newVelocity = velocityY + GRAVITY;
         const newY = y + newVelocity;
 
-        // Game over check
         if (newY > height) {
           setGameOver(true);
           return y;
         }
 
-        // Collision detection
+        // Platform collision
         for (let p of platforms) {
           const withinX = playerX + PLAYER_SIZE > p.x && playerX < p.x + PLATFORM_WIDTH;
           const withinY = y + PLAYER_SIZE >= p.y && y + PLAYER_SIZE <= p.y + PLATFORM_HEIGHT;
           if (withinX && withinY && newVelocity > 0) {
             setVelocityY(JUMP_VELOCITY);
+
+            // 🟩 If platform not already scored, add score
+            if (!scoredPlatforms.current.has(p.id)) {
+              scoredPlatforms.current.add(p.id);
+              setScore((s) => s + 1);
+            }
+
             return y - 15;
           }
         }
@@ -106,29 +130,36 @@ export default function App() {
         return newY;
       });
 
+      // Horizontal movement
       setPlayerX((x) => {
         if (direction === 'left') return Math.max(0, x - speed);
         if (direction === 'right') return Math.min(width - PLAYER_SIZE, x + speed);
         return x;
       });
 
-      // Scroll platforms down if player is high
+      // Scroll + generate new platforms
       if (playerY < height / 2) {
         const diff = height / 2 - playerY;
         scrollOffset.current += diff;
         setPlayerY(height / 2);
+
         setPlatforms((prev) =>
           prev
             .map((p) => ({ ...p, y: p.y + diff }))
-            .filter((p) => p.y < height + 100) // keep only visible
+            .filter((p) => p.y < height + 100)
         );
 
-        // Generate new platforms at top
         const topMost = Math.min(...platforms.map((p) => p.y));
-        if (topMost > 0) {
+        const gapY = Math.random() * (PLATFORM_Y_GAP_RANGE.max - PLATFORM_Y_GAP_RANGE.min) + PLATFORM_Y_GAP_RANGE.min;
+        const newY = topMost - gapY;
+
+        if (newY >= 0) {
           const newPlatform = {
-            x: Math.random() * (width - PLATFORM_WIDTH),
-            y: topMost - (Math.random() * 120 + 80),
+            id: Date.now(), // unique ID
+            x: RNPlatform.OS === 'web'
+              ? Math.random() * (PLATFORM_X_RANGE.max - PLATFORM_X_RANGE.min) + PLATFORM_X_RANGE.min
+              : Math.random() * (width - PLATFORM_WIDTH),
+            y: newY,
           };
           setPlatforms((prev) => [newPlatform, ...prev]);
         }
@@ -138,6 +169,33 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isReady, showMenu, velocityY, direction, playerY, gameOver]);
 
+  //--------------- Keyboard Controls ---------------
+  useEffect(() => {
+    if (RNPlatform.OS === 'web') {
+      const handleKeyDown = (e) => {
+        if (e.key === 'ArrowLeft') {
+          setDirection('left');
+          setFacing('left');
+        } else if (e.key === 'ArrowRight') {
+          setDirection('right');
+          setFacing('right');
+        }
+      };
+      const handleKeyUp = (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          setDirection(null);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      };
+    }
+  }, []);
+
+  //--------------- UI: Menu / Game Over ---------------
   if (!isReady) return null;
 
   if (showMenu) {
@@ -165,6 +223,7 @@ export default function App() {
     return (
       <View style={styles.menuContainer}>
         <Text style={styles.title}>☠ Game Over</Text>
+        <Text style={styles.score}>Score: {score}</Text>
         <TouchableOpacity
           style={styles.startButton}
           onPress={() => {
@@ -174,31 +233,37 @@ export default function App() {
         >
           <Text style={styles.startText}>Back to Menu</Text>
         </TouchableOpacity>
-        <Text style={styles.instructions}>You fell off the screen</Text>
       </View>
     );
   }
 
+  //--------------- Game UI ---------------
   return (
     <View style={styles.container}>
-      <Player x={playerX} y={playerY} />
-      {platforms.map((p, index) => (
-        <PlatformBlock key={index} x={p.x} y={p.y} />
+      <Text style={styles.scoreText}>Score: {score}</Text>
+      <Player x={playerX} y={playerY} facing={facing} />
+      {platforms.map((p) => (
+        <PlatformBlock key={p.id} x={p.x} y={p.y} />
       ))}
 
-      {/* Mobile Controls */}
       {RNPlatform.OS !== 'web' && (
         <View style={styles.controls}>
           <TouchableOpacity
             style={styles.controlButton}
-            onPressIn={() => setDirection('left')}
+            onPressIn={() => {
+              setDirection('left');
+              setFacing('left');
+            }}
             onPressOut={() => setDirection(null)}
           >
             <Text style={styles.controlText}>◀</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.controlButton}
-            onPressIn={() => setDirection('right')}
+            onPressIn={() => {
+              setDirection('right');
+              setFacing('right');
+            }}
             onPressOut={() => setDirection(null)}
           >
             <Text style={styles.controlText}>▶</Text>
@@ -209,6 +274,7 @@ export default function App() {
   );
 }
 
+//--------------- Styles ---------------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -223,14 +289,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     fontWeight: 'bold',
-    marginBottom: 40,
+    marginBottom: 20,
   },
   startButton: {
     backgroundColor: '#33c37d',
     paddingVertical: 15,
     paddingHorizontal: 40,
     borderRadius: 12,
-    marginBottom: 20,
+    marginTop: 20,
   },
   startText: {
     fontSize: 20,
@@ -240,6 +306,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     marginTop: 10,
+  },
+  score: {
+    fontSize: 24,
+    marginTop: 10,
+    fontWeight: 'bold',
+  },
+  scoreText: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#000',
+    zIndex: 10,
   },
   controls: {
     position: 'absolute',
