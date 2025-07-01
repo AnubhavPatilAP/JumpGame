@@ -1,35 +1,29 @@
 import React, { useEffect, useState, useRef } from 'react';
-import {
-  StyleSheet,
-  View,
-  Dimensions,
-  Text,
-  TouchableOpacity,
-  Platform as RNPlatform,
-} from 'react-native';
+import { Dimensions, Platform as RNPlatform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
+
 import Player from './components/Player';
-import PlatformBlock from './components/Platform';
+import PlatformBlock from './components/Platform'; 
+import MenuScreen from './components/MenuScreen';
+import GameOverScreen from './components/GameOverScreen';
+import GameUI from './components/GameUI';
+import Controls from './components/Controls';
+import Background from './components/Background';
 
 const { width, height } = Dimensions.get('window');
 const PLAYER_SIZE = 60;
-const PLATFORM_WIDTH = 100;
+const PLATFORM_WIDTH = 130;
 const PLATFORM_HEIGHT = 20;
 const GRAVITY = 0.6;
-
-const JUMP_VELOCITY = -18;
-const PLATFORM_X_RANGE = {
-  min: width * 0.25,
-  max: width * 0.75 - PLATFORM_WIDTH,
-};
-const PLATFORM_Y_GAP_RANGE = {
-  min: 90,
-  max: 130,
-};
+const JUMP_VELOCITY = RNPlatform.OS === 'web' ? -18 : -12; 
+const PLATFORM_X_RANGE = { min: width * 0.15, max: width * 0.55 - PLATFORM_WIDTH };
+const PLATFORM_Y_GAP_RANGE = { min: 90, max: 130 };
 const MAX_PLATFORM_Y = height - 150;
 
 SplashScreen.preventAutoHideAsync();
+
+let platformIdCounter = 0;
 
 export default function App() {
   const [isReady, setIsReady] = useState(false);
@@ -43,18 +37,14 @@ export default function App() {
   const [platforms, setPlatforms] = useState([]);
   const scrollOffset = useRef(0);
   const speed = 5;
-
-  // 🟩 Score logic
   const [score, setScore] = useState(0);
   const scoredPlatforms = useRef(new Set());
 
-  //--------------- Load Assets ---------------
   useEffect(() => {
     async function prepare() {
       try {
         await Asset.loadAsync([
-          require('./assets/player.png'),
-          require('./assets/platform.png'),
+          require('./assets/player.png') // Only preload player
         ]);
       } catch (e) {
         console.warn(e);
@@ -63,31 +53,27 @@ export default function App() {
         await SplashScreen.hideAsync();
       }
     }
-
     prepare();
   }, []);
 
-  //--------------- Generate Initial Platforms ---------------
   useEffect(() => {
     if (isReady && !showMenu) {
       const initial = [];
       let y = MAX_PLATFORM_Y;
+      const initialPlatformCount = RNPlatform.OS === 'web' ? 6 : 4;
 
-      for (let i = 0; i < 6; i++) {
-        const x = RNPlatform.OS === 'web'
-          ? Math.random() * (PLATFORM_X_RANGE.max - PLATFORM_X_RANGE.min) + PLATFORM_X_RANGE.min
-          : Math.random() * (width - PLATFORM_WIDTH);
-
-        initial.push({ id: i, x, y }); // give each platform an id
-        const gapY = Math.random() * (PLATFORM_Y_GAP_RANGE.max - PLATFORM_Y_GAP_RANGE.min) + PLATFORM_Y_GAP_RANGE.min;
+      for (let i = 0; i < initialPlatformCount; i++) {
+        const x = Math.random() * (width - PLATFORM_WIDTH);
+        initial.push({ id: platformIdCounter++, x, y });
+        const extraGap = RNPlatform.OS === 'web' ? 0 : 20;
+        const gapY = Math.random() * (PLATFORM_Y_GAP_RANGE.max - PLATFORM_Y_GAP_RANGE.min) + PLATFORM_Y_GAP_RANGE.min + extraGap;
         y -= gapY;
         if (y < 0) break;
       }
 
       setPlatforms(initial);
-      scoredPlatforms.current.clear(); // 🟩 reset score state
+      scoredPlatforms.current.clear();
       setScore(0);
-
       const lowest = initial.reduce((a, b) => (a.y > b.y ? a : b));
       setPlayerX(lowest.x + PLATFORM_WIDTH / 2 - PLAYER_SIZE / 2);
       setPlayerY(lowest.y - PLAYER_SIZE);
@@ -95,7 +81,6 @@ export default function App() {
     }
   }, [isReady, showMenu]);
 
-  //--------------- Game Loop ---------------
   useEffect(() => {
     if (!isReady || showMenu || gameOver) return;
 
@@ -109,19 +94,15 @@ export default function App() {
           return y;
         }
 
-        // Platform collision
         for (let p of platforms) {
           const withinX = playerX + PLAYER_SIZE > p.x && playerX < p.x + PLATFORM_WIDTH;
           const withinY = y + PLAYER_SIZE >= p.y && y + PLAYER_SIZE <= p.y + PLATFORM_HEIGHT;
           if (withinX && withinY && newVelocity > 0) {
             setVelocityY(JUMP_VELOCITY);
-
-            // 🟩 If platform not already scored, add score
             if (!scoredPlatforms.current.has(p.id)) {
               scoredPlatforms.current.add(p.id);
               setScore((s) => s + 1);
             }
-
             return y - 15;
           }
         }
@@ -130,35 +111,37 @@ export default function App() {
         return newY;
       });
 
-      // Horizontal movement
+      // ✅ Screen wrap logic for both web & mobile
       setPlayerX((x) => {
-        if (direction === 'left') return Math.max(0, x - speed);
-        if (direction === 'right') return Math.min(width - PLAYER_SIZE, x + speed);
-        return x;
+        let newX = x;
+        if (direction === 'left') {
+          newX -= speed;
+          if (newX + PLAYER_SIZE < 0) newX = width;
+        } else if (direction === 'right') {
+          newX += speed;
+          if (newX > width) newX = -PLAYER_SIZE;
+        }
+        return newX;
       });
 
-      // Scroll + generate new platforms
       if (playerY < height / 2) {
         const diff = height / 2 - playerY;
         scrollOffset.current += diff;
         setPlayerY(height / 2);
 
         setPlatforms((prev) =>
-          prev
-            .map((p) => ({ ...p, y: p.y + diff }))
-            .filter((p) => p.y < height + 100)
+          prev.map((p) => ({ ...p, y: p.y + diff })).filter((p) => p.y < height + 100)
         );
 
         const topMost = Math.min(...platforms.map((p) => p.y));
-        const gapY = Math.random() * (PLATFORM_Y_GAP_RANGE.max - PLATFORM_Y_GAP_RANGE.min) + PLATFORM_Y_GAP_RANGE.min;
+        const extraGap = RNPlatform.OS === 'web' ? 0 : 20;
+        const gapY = Math.random() * (PLATFORM_Y_GAP_RANGE.max - PLATFORM_Y_GAP_RANGE.min) + PLATFORM_Y_GAP_RANGE.min + extraGap;
         const newY = topMost - gapY;
 
         if (newY >= 0) {
           const newPlatform = {
-            id: Date.now(), // unique ID
-            x: RNPlatform.OS === 'web'
-              ? Math.random() * (PLATFORM_X_RANGE.max - PLATFORM_X_RANGE.min) + PLATFORM_X_RANGE.min
-              : Math.random() * (width - PLATFORM_WIDTH),
+            id: platformIdCounter++,
+            x: Math.random() * (width - PLATFORM_WIDTH),
             y: newY,
           };
           setPlatforms((prev) => [newPlatform, ...prev]);
@@ -169,7 +152,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isReady, showMenu, velocityY, direction, playerY, gameOver]);
 
-  //--------------- Keyboard Controls ---------------
   useEffect(() => {
     if (RNPlatform.OS === 'web') {
       const handleKeyDown = (e) => {
@@ -195,147 +177,44 @@ export default function App() {
     }
   }, []);
 
-  //--------------- UI: Menu / Game Over ---------------
   if (!isReady) return null;
 
-  if (showMenu) {
-    return (
-      <View style={styles.menuContainer}>
-        <Text style={styles.title}>🪂 Doodle Jump</Text>
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={() => {
-            setShowMenu(false);
-            setGameOver(false);
-            setPlayerY(height - 200);
-            setVelocityY(0);
-            scrollOffset.current = 0;
-          }}
-        >
-          <Text style={styles.startText}>Start Game</Text>
-        </TouchableOpacity>
-        <Text style={styles.instructions}>Tap arrows or use keys ← →</Text>
-      </View>
-    );
-  }
+  if (showMenu)
+    return <MenuScreen onStart={() => setShowMenu(false)} />;
 
-  if (gameOver) {
+  if (gameOver)
     return (
-      <View style={styles.menuContainer}>
-        <Text style={styles.title}>☠ Game Over</Text>
-        <Text style={styles.score}>Score: {score}</Text>
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={() => {
-            setShowMenu(true);
-            setGameOver(false);
-          }}
-        >
-          <Text style={styles.startText}>Back to Menu</Text>
-        </TouchableOpacity>
-      </View>
+      <GameOverScreen
+        score={score}
+        onRestart={() => {
+          setShowMenu(true);
+          setGameOver(false);
+        }}
+      />
     );
-  }
 
-  //--------------- Game UI ---------------
   return (
-    <View style={styles.container}>
-      <Text style={styles.scoreText}>Score: {score}</Text>
-      <Player x={playerX} y={playerY} facing={facing} />
-      {platforms.map((p) => (
-        <PlatformBlock key={p.id} x={p.x} y={p.y} />
-      ))}
-
+    <Background>
+      <GameUI
+        score={score}
+        platforms={platforms}
+        playerX={playerX}
+        playerY={playerY}
+        facing={facing}
+      />
       {RNPlatform.OS !== 'web' && (
-        <View style={styles.controls}>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPressIn={() => {
-              setDirection('left');
-              setFacing('left');
-            }}
-            onPressOut={() => setDirection(null)}
-          >
-            <Text style={styles.controlText}>◀</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPressIn={() => {
-              setDirection('right');
-              setFacing('right');
-            }}
-            onPressOut={() => setDirection(null)}
-          >
-            <Text style={styles.controlText}>▶</Text>
-          </TouchableOpacity>
-        </View>
+        <Controls
+          onLeft={() => {
+            setDirection('left');
+            setFacing('left');
+          }}
+          onRight={() => {
+            setDirection('right');
+            setFacing('right');
+          }}
+          onRelease={() => setDirection(null)}
+        />
       )}
-    </View>
+    </Background>
   );
 }
-
-//--------------- Styles ---------------
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#87ceeb',
-  },
-  menuContainer: {
-    flex: 1,
-    backgroundColor: '#87ceeb',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  startButton: {
-    backgroundColor: '#33c37d',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 12,
-    marginTop: 20,
-  },
-  startText: {
-    fontSize: 20,
-    color: '#fff',
-  },
-  instructions: {
-    fontSize: 16,
-    color: '#333',
-    marginTop: 10,
-  },
-  score: {
-    fontSize: 24,
-    marginTop: 10,
-    fontWeight: 'bold',
-  },
-  scoreText: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#000',
-    zIndex: 10,
-  },
-  controls: {
-    position: 'absolute',
-    bottom: 20,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  controlButton: {
-    backgroundColor: '#00000088',
-    padding: 20,
-    borderRadius: 40,
-  },
-  controlText: {
-    fontSize: 24,
-    color: '#fff',
-  },
-});
