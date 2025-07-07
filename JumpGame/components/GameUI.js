@@ -9,7 +9,13 @@ export default function GameUI({ score, platforms, playerX, playerY, facing }) {
       <Text style={styles.score}>Score: {score}</Text>
       <Player x={playerX} y={playerY} facing={facing} />
       {platforms.map((p) => (
-        <PlatformBlock key={p.id} x={p.x} y={p.y} />
+        <PlatformBlock
+          key={p.id}
+          x={p.x}
+          y={p.y}
+          type={p.type}
+          moving={p.moving}
+        />
       ))}
     </>
   );
@@ -20,9 +26,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 40,
     left: 20,
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#000',
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#fff',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
     zIndex: 10,
   },
 });
