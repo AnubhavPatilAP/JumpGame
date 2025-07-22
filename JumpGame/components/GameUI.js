@@ -3,11 +3,18 @@ import { Text, StyleSheet } from 'react-native';
 import Player from './Player';
 import PlatformBlock from './Platform';
 
-export default function GameUI({ score, platforms, playerX, playerY, facing }) {
+export default function GameUI({
+  score,
+  platforms,
+  playerX,
+  playerY,
+  facing,
+  playerSize,
+}) {
   return (
     <>
       <Text style={styles.score}>Score: {score}</Text>
-      <Player x={playerX} y={playerY} facing={facing} />
+      <Player x={playerX} y={playerY} facing={facing} size={playerSize} />
       {platforms.map((p) => (
         <PlatformBlock
           key={p.id}
@@ -15,6 +22,9 @@ export default function GameUI({ score, platforms, playerX, playerY, facing }) {
           y={p.y}
           type={p.type}
           moving={p.moving}
+          jumpCount={p.jumpCount}
+          status={p.status}
+          showDebug={false}
         />
       ))}
     </>

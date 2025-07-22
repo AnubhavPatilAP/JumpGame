@@ -1,16 +1,17 @@
 import React from 'react';
-import { View, StyleSheet, Dimensions, ImageBackground } from 'react-native';
+import { View, StyleSheet, Dimensions, ImageBackground, Platform } from 'react-native';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
 export default function Background({ children }) {
+  const isMobile = Platform.OS === 'android' || Platform.OS === 'ios';
+
   return (
     <View style={styles.gameScreen}>
-      {/* Tree trunk with bark texture */}
       <ImageBackground
         source={require('../assets/bark-texture.png')}
-        resizeMode="repeat"
-        style={styles.treeTrunk}
+        resizeMode={isMobile ? 'cover' : 'repeat'}
+        style={isMobile ? styles.fullscreenBark : styles.treeTrunk}
       />
       {children}
     </View>
@@ -31,7 +32,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: '50%',
     width: SCREEN_WIDTH * 0.7,
-    height: '100%',
+    height: SCREEN_HEIGHT,
     marginLeft: -(SCREEN_WIDTH * 0.7) / 2,
+    zIndex: -1,
+  },
+  fullscreenBark: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    zIndex: -1,
   },
 });

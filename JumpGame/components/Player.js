@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, StyleSheet } from 'react-native';
 import playerImage from '../assets/player.png';
 
-export default function Player({ x, y, facing }) {
+export default function Player({ x, y, facing, size = 60 }) {
   return (
     <Image
       source={playerImage}
@@ -11,6 +11,8 @@ export default function Player({ x, y, facing }) {
         {
           left: x,
           top: y,
+          width: size,
+          height: size,
           transform: [{ scaleX: facing === 'left' ? -1 : 1 }],
         },
       ]}
@@ -21,7 +23,5 @@ export default function Player({ x, y, facing }) {
 const styles = StyleSheet.create({
   player: {
     position: 'absolute',
-    width: 60,
-    height: 60,
   },
 });
