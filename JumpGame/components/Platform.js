@@ -10,11 +10,11 @@ const Platform = ({
   showDebug = false,
 }) => {
   const getWidthByType = (platformType) => {
-    if (platformType === 'small') return RNPlatform.OS === 'web' ? 90 : 70;
-    return RNPlatform.OS === 'web' ? 120 : 100;
+    if (platformType === 'small') return RNPlatform.OS === 'web' ? 90 : 60;
+    return RNPlatform.OS === 'web' ? 120 : 85;
   };
 
-  const getHeight = () => (RNPlatform.OS === 'web' ? 18 : 14);
+  const getHeight = () => (RNPlatform.OS === 'web' ? 18 : 12);
 
   const getStyle = () => {
     const width = getWidthByType(type);
